@@ -24,18 +24,22 @@ public class Field implements java.io.Serializable {
 
     private static final long serialVersionUID = -3489407607572041783L;
 
+    // 字段名称
     /**
      * The Name.
      */
     private String name;
 
+    // 主键类型
     private KeyType keyType = KeyType.NULL;
 
+    // 字段类型
     /**
      * The Type.
      */
     private int type;
 
+    // 字段值
     /**
      * The Value.
      */

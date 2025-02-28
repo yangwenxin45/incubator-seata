@@ -16,12 +16,6 @@
  */
 package org.apache.seata.rm.datasource.sql.struct.cache;
 
-import java.sql.Connection;
-import java.sql.SQLException;
-import java.util.Map;
-import java.util.concurrent.ConcurrentMap;
-import java.util.concurrent.TimeUnit;
-
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import org.apache.seata.common.exception.ShouldNeverHappenException;
@@ -32,18 +26,26 @@ import org.apache.seata.sqlparser.struct.TableMetaCache;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.sql.Connection;
+import java.sql.SQLException;
+import java.util.Map;
+import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.TimeUnit;
+
 /**
  * The type Table meta cache.
- *
  */
 public abstract class AbstractTableMetaCache implements TableMetaCache {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(AbstractTableMetaCache.class);
 
+    // 缓存大小，默认为100KB
     private static final long CACHE_SIZE = 100000;
 
+    // 失效时间，默认为 15 分钟
     private static final long EXPIRE_TIME = 900 * 1000;
 
+    // 缓存数据
     private static final Cache<String, TableMeta> TABLE_META_CACHE;
 
     static {
@@ -63,7 +65,9 @@ public abstract class AbstractTableMetaCache implements TableMetaCache {
             throw new IllegalArgumentException("TableMeta cannot be fetched without tableName");
         }
 
+        // 获取缓存 key
         final String key = getCacheKey(connection, tableName, resourceId);
+        // 从缓存中获取表元数据
         TableMeta tmeta = TABLE_META_CACHE.get(key, mappingFunction -> {
             try {
                 return fetchSchema(connection, tableName);
@@ -73,6 +77,7 @@ public abstract class AbstractTableMetaCache implements TableMetaCache {
             }
         });
 
+        // 表元数据为空则抛出异常
         if (tmeta == null) {
             throw new ShouldNeverHappenException(String.format("[xid:%s] Get table meta failed," +
                 " please check whether the table `%s` exists.", RootContext.getXID(), tableName));

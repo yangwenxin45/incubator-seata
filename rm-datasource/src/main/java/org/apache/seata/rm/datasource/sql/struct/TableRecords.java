@@ -16,30 +16,15 @@
  */
 package org.apache.seata.rm.datasource.sql.struct;
 
-import java.sql.Array;
-import java.sql.Blob;
-import java.sql.Clob;
-import java.sql.NClob;
-import java.sql.Ref;
-import java.sql.ResultSet;
-import java.sql.ResultSetMetaData;
-import java.sql.SQLException;
-import java.sql.Types;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import javax.sql.rowset.serial.SerialBlob;
-import javax.sql.rowset.serial.SerialClob;
-import javax.sql.rowset.serial.SerialDatalink;
-import javax.sql.rowset.serial.SerialJavaObject;
-import javax.sql.rowset.serial.SerialRef;
 import org.apache.seata.common.exception.ShouldNeverHappenException;
 import org.apache.seata.rm.datasource.exception.TableMetaException;
 import org.apache.seata.rm.datasource.sql.serial.SerialArray;
 import org.apache.seata.sqlparser.struct.ColumnMeta;
 import org.apache.seata.sqlparser.struct.TableMeta;
+
+import javax.sql.rowset.serial.*;
+import java.sql.*;
+import java.util.*;
 
 import static org.apache.seata.rm.datasource.exec.oracle.OracleJdbcType.TIMESTAMP_WITH_LOCAL_TIME_ZONE;
 import static org.apache.seata.rm.datasource.exec.oracle.OracleJdbcType.TIMESTAMP_WITH_TIME_ZONE;
@@ -54,10 +39,13 @@ public class TableRecords implements java.io.Serializable {
 
     private static final long serialVersionUID = 4441667803166771721L;
 
+    // 表元数据
     private transient TableMeta tableMeta;
 
+    // 表名称
     private String tableName;
 
+    // 行集合
     private List<Row> rows = new ArrayList<Row>();
 
     /**

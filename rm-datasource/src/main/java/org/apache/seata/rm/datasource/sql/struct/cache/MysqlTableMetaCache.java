@@ -16,28 +16,22 @@
  */
 package org.apache.seata.rm.datasource.sql.struct.cache;
 
-import java.sql.Connection;
-import java.sql.DatabaseMetaData;
-import java.sql.ResultSet;
-import java.sql.ResultSetMetaData;
-import java.sql.SQLException;
-import java.sql.Statement;
-
 import org.apache.seata.common.exception.NotSupportYetException;
 import org.apache.seata.common.exception.ShouldNeverHappenException;
 import org.apache.seata.common.loader.LoadLevel;
-import org.apache.seata.sqlparser.util.ColumnUtils;
 import org.apache.seata.sqlparser.struct.ColumnMeta;
 import org.apache.seata.sqlparser.struct.IndexMeta;
 import org.apache.seata.sqlparser.struct.IndexType;
 import org.apache.seata.sqlparser.struct.TableMeta;
+import org.apache.seata.sqlparser.util.ColumnUtils;
 import org.apache.seata.sqlparser.util.JdbcConstants;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.sql.*;
+
 /**
  * The type Table meta cache.
- *
  */
 @LoadLevel(name = JdbcConstants.MYSQL)
 public class MysqlTableMetaCache extends AbstractTableMetaCache {
@@ -77,9 +71,11 @@ public class MysqlTableMetaCache extends AbstractTableMetaCache {
 
     @Override
     protected TableMeta fetchSchema(Connection connection, String tableName) throws SQLException {
+        // 只查询一行
         String sql = "SELECT * FROM " + ColumnUtils.addEscape(tableName, JdbcConstants.MYSQL) + " LIMIT 1";
         try (Statement stmt = connection.createStatement();
             ResultSet rs = stmt.executeQuery(sql)) {
+            // 将结果集的元数据和数据库元数据转为表元数据
             return resultSetMetaToSchema(rs.getMetaData(), connection.getMetaData(), tableName);
         } catch (SQLException sqlEx) {
             throw sqlEx;
@@ -121,10 +117,14 @@ public class MysqlTableMetaCache extends AbstractTableMetaCache {
          * 2. select xxx from xxx where catalog_name like ? and table_name like ?(informationSchema=true)
          */
 
+        // 通过数据库元数据得到所有列
         try (ResultSet rsColumns = dbmd.getColumns(catalogName, schemaName, tableName, "%");
+             // 通过数据库元数据得到所有索引
              ResultSet rsIndex = dbmd.getIndexInfo(catalogName, schemaName, tableName, false, true);
              ResultSet onUpdateColumns = dbmd.getVersionColumns(catalogName, schemaName, tableName)) {
+            // 遍历所有列
             while (rsColumns.next()) {
+                // 生成列元数据
                 ColumnMeta col = new ColumnMeta();
                 col.setTableCat(rsColumns.getString("TABLE_CAT"));
                 col.setTableSchemaName(rsColumns.getString("TABLE_SCHEM"));
@@ -156,6 +156,7 @@ public class MysqlTableMetaCache extends AbstractTableMetaCache {
                 tm.getAllColumns().get(onUpdateColumns.getString("COLUMN_NAME")).setOnUpdate(true);
             }
 
+            // 遍历所有索引
             while (rsIndex.next()) {
                 String indexName = rsIndex.getString("INDEX_NAME");
                 String colName = rsIndex.getString("COLUMN_NAME");
@@ -165,6 +166,7 @@ public class MysqlTableMetaCache extends AbstractTableMetaCache {
                     IndexMeta index = tm.getAllIndexes().get(indexName);
                     index.getValues().add(col);
                 } else {
+                    // 生成索引元数据
                     IndexMeta index = new IndexMeta();
                     index.setIndexName(indexName);
                     index.setNonUnique(rsIndex.getBoolean("NON_UNIQUE"));

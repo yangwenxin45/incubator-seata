@@ -16,38 +16,33 @@
  */
 package org.apache.seata.sqlparser.struct;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Map.Entry;
-import java.util.Set;
-import java.util.TreeSet;
-import java.util.Collections;
-import java.util.Objects;
-import java.util.stream.Collectors;
-
 import org.apache.seata.common.exception.NotSupportYetException;
 import org.apache.seata.common.util.CollectionUtils;
 import org.apache.seata.common.util.LowerCaseLinkHashMap;
 import org.apache.seata.sqlparser.util.ColumnUtils;
 
+import java.util.*;
+import java.util.Map.Entry;
+import java.util.stream.Collectors;
+
 /**
  * The type Table meta.
- *
  */
 public class TableMeta {
+    // 表名称
     private String tableName;
 
     private String originalTableName;
 
     private boolean isCaseSensitive;
 
+    // 所有列元数据
     /**
      * key: column name
      */
     private final Map<String, ColumnMeta> allColumns = new LowerCaseLinkHashMap<>();
 
+    // 所有索引元数据
     /**
      * key: index name
      */

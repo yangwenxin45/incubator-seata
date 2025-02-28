@@ -16,17 +16,18 @@
  */
 package org.apache.seata.sqlparser.struct;
 
+import org.apache.commons.lang.ArrayUtils;
+
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
-
-import org.apache.commons.lang.ArrayUtils;
 
 /**
  * The type Index meta.
  *
  */
 public class IndexMeta {
+    // 列元数据列表
     private List<ColumnMeta> values = new ArrayList<ColumnMeta>();
 
     private boolean nonUnique;
