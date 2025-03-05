@@ -26,6 +26,7 @@ import org.apache.seata.core.exception.TransactionException;
  */
 public interface ResourceManagerInbound {
 
+    // 二阶段提交分支事务
     /**
      * Commit a branch transaction.
      *
@@ -40,6 +41,7 @@ public interface ResourceManagerInbound {
      */
     BranchStatus branchCommit(BranchType branchType, String xid, long branchId, String resourceId, String applicationData) throws TransactionException;
 
+    // 二阶段回滚分支事务
     /**
      * Rollback a branch transaction.
      *

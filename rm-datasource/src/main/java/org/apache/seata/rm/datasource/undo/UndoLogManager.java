@@ -16,14 +16,14 @@
  */
 package org.apache.seata.rm.datasource.undo;
 
+import org.apache.seata.core.exception.TransactionException;
+import org.apache.seata.rm.datasource.ConnectionProxy;
+import org.apache.seata.rm.datasource.DataSourceProxy;
+
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.util.Date;
 import java.util.Set;
-
-import org.apache.seata.core.exception.TransactionException;
-import org.apache.seata.rm.datasource.ConnectionProxy;
-import org.apache.seata.rm.datasource.DataSourceProxy;
 
 /**
  * The type Undo log manager.
@@ -31,6 +31,7 @@ import org.apache.seata.rm.datasource.DataSourceProxy;
  */
 public interface UndoLogManager {
 
+    // 保存事务日志
     /**
      * Flush undo logs.
      * @param cp the cp
@@ -38,6 +39,7 @@ public interface UndoLogManager {
      */
     void flushUndoLogs(ConnectionProxy cp) throws SQLException;
 
+    // 回滚
     /**
      * Undo.
      *
@@ -48,6 +50,7 @@ public interface UndoLogManager {
      */
     void undo(DataSourceProxy dataSourceProxy, String xid, long branchId) throws TransactionException;
 
+    // 删除事务日志
     /**
      * Delete undo log.
      *
@@ -58,6 +61,7 @@ public interface UndoLogManager {
      */
     void deleteUndoLog(String xid, long branchId, Connection conn) throws SQLException;
 
+    // 批量删除事务日志
     /**
      * batch Delete undo log.
      *
@@ -68,6 +72,7 @@ public interface UndoLogManager {
      */
     void batchDeleteUndoLog(Set<String> xids, Set<Long> branchIds, Connection conn) throws SQLException;
 
+    // 根据创建时间删除事务日志
     /**
      * delete undolog by created
      * @param logCreated the created time

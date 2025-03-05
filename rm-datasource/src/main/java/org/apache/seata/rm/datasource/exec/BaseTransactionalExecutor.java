@@ -16,19 +16,6 @@
  */
 package org.apache.seata.rm.datasource.exec;
 
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
-import java.sql.SQLException;
-import java.sql.Statement;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.StringJoiner;
-import java.util.TreeSet;
-import java.util.stream.Collectors;
-import java.util.stream.Stream;
-
 import org.apache.seata.common.DefaultValues;
 import org.apache.seata.common.exception.ShouldNeverHappenException;
 import org.apache.seata.common.util.CollectionUtils;
@@ -37,21 +24,24 @@ import org.apache.seata.common.util.StringUtils;
 import org.apache.seata.config.ConfigurationFactory;
 import org.apache.seata.core.constants.ConfigurationKeys;
 import org.apache.seata.core.context.RootContext;
-import org.apache.seata.sqlparser.util.ColumnUtils;
 import org.apache.seata.rm.datasource.ConnectionProxy;
 import org.apache.seata.rm.datasource.SqlGenerateUtils;
 import org.apache.seata.rm.datasource.StatementProxy;
 import org.apache.seata.rm.datasource.sql.struct.Field;
-import org.apache.seata.sqlparser.struct.TableMeta;
 import org.apache.seata.rm.datasource.sql.struct.TableMetaCacheFactory;
 import org.apache.seata.rm.datasource.sql.struct.TableRecords;
 import org.apache.seata.rm.datasource.undo.SQLUndoLog;
-import org.apache.seata.sqlparser.ParametersHolder;
-import org.apache.seata.sqlparser.SQLInsertRecognizer;
-import org.apache.seata.sqlparser.SQLRecognizer;
-import org.apache.seata.sqlparser.SQLType;
-import org.apache.seata.sqlparser.WhereRecognizer;
+import org.apache.seata.sqlparser.*;
+import org.apache.seata.sqlparser.struct.TableMeta;
+import org.apache.seata.sqlparser.util.ColumnUtils;
 
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Statement;
+import java.util.*;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import static org.apache.seata.rm.datasource.exec.AbstractDMLBaseExecutor.WHERE;
 
@@ -120,9 +110,11 @@ public abstract class BaseTransactionalExecutor<T, S extends Statement> implemen
     public T execute(Object... args) throws Throwable {
         String xid = RootContext.getXID();
         if (xid != null) {
+            // 连接代理绑定全局事务 ID
             statementProxy.getConnectionProxy().bind(xid);
         }
 
+        // 设置全局锁标识
         statementProxy.getConnectionProxy().setGlobalLockRequire(RootContext.requireGlobalLock());
         return doExecute(args);
     }
@@ -391,21 +383,27 @@ public abstract class BaseTransactionalExecutor<T, S extends Statement> implemen
      * @throws SQLException the sql exception
      */
     protected void prepareUndoLog(TableRecords beforeImage, TableRecords afterImage) throws SQLException {
+        // 如果前镜像和后镜像都为空，则返回
         if (beforeImage.getRows().isEmpty() && afterImage.getRows().isEmpty()) {
             return;
         }
         if (SQLType.UPDATE == sqlRecognizer.getSQLType()) {
+            // update 语句如果行数不同，则抛出异常
             if (beforeImage.getRows().size() != afterImage.getRows().size()) {
                 throw new ShouldNeverHappenException("Before image size is not equaled to after image size, probably because you updated the primary keys.");
             }
         }
+        // 数据库连接代理
         ConnectionProxy connectionProxy = statementProxy.getConnectionProxy();
 
+        // delete 语句使用前镜像，update 和 insert 语句使用后镜像
         TableRecords lockKeyRecords = sqlRecognizer.getSQLType() == SQLType.DELETE ? beforeImage : afterImage;
+        // 构建全局锁
         String lockKeys = buildLockKey(lockKeyRecords);
         if (null != lockKeys) {
             connectionProxy.appendLockKey(lockKeys);
 
+            // 构建事务日志
             SQLUndoLog sqlUndoLog = buildUndoItem(beforeImage, afterImage);
             connectionProxy.appendUndoLog(sqlUndoLog);
         }
@@ -490,7 +488,9 @@ public abstract class BaseTransactionalExecutor<T, S extends Statement> implemen
         ResultSet rs = null;
         try {
             ps = statementProxy.getConnection().prepareStatement(selectSQL);
+            // 设置参数
             if (CollectionUtils.isNotEmpty(paramAppenderList)) {
+                // 循环处理所有参数
                 for (int i = 0, ts = paramAppenderList.size(); i < ts; i++) {
                     List<Object> paramAppender = paramAppenderList.get(i);
                     for (int j = 0, ds = paramAppender.size(); j < ds; j++) {
@@ -498,7 +498,9 @@ public abstract class BaseTransactionalExecutor<T, S extends Statement> implemen
                     }
                 }
             }
+            // 执行查询
             rs = ps.executeQuery();
+            // 根据表元数据和结果集构建表记录
             return TableRecords.buildRecords(tableMeta, rs);
         } finally {
             IOUtil.close(rs, ps);

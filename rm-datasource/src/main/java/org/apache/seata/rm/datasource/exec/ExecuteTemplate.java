@@ -16,10 +16,6 @@
  */
 package org.apache.seata.rm.datasource.exec;
 
-import java.sql.SQLException;
-import java.sql.Statement;
-import java.util.List;
-
 import org.apache.seata.common.exception.NotSupportYetException;
 import org.apache.seata.common.loader.EnhancedServiceLoader;
 import org.apache.seata.common.util.CollectionUtils;
@@ -40,9 +36,12 @@ import org.apache.seata.sqlparser.SQLRecognizer;
 import org.apache.seata.sqlparser.SQLType;
 import org.apache.seata.sqlparser.util.JdbcConstants;
 
+import java.sql.SQLException;
+import java.sql.Statement;
+import java.util.List;
+
 /**
  * The type Execute template.
- *
  */
 public class ExecuteTemplate {
 
@@ -64,6 +63,14 @@ public class ExecuteTemplate {
     }
 
     /**
+     * 如果这个 SQL 语句不在分布式事务中，并且也没有查询全局锁的要求，
+     * 则不需要将其纳入 Seata 框架下进行处理，用原始的 Statement 直接处理即可；
+     * 反之则需要根据 SQL 语句的类型选用不同的执行器来执行
+     *
+     * @author yangwenxin
+     * @date 2025-03-03 16:32
+     */
+    /**
      * Execute t.
      *
      * @param <T>               the type parameter
@@ -79,30 +86,37 @@ public class ExecuteTemplate {
                                                      StatementProxy<S> statementProxy,
                                                      StatementCallback<T, S> statementCallback,
                                                      Object... args) throws SQLException {
+        // 如果不检查全局锁并且不是 AT 分支
         if (!RootContext.requireGlobalLock() && BranchType.AT != RootContext.getBranchType()) {
             // Just work as original statement
+            // 则执行目标 Statement
             return statementCallback.execute(statementProxy.getTargetStatement(), args);
         }
 
+        // 数据库类型
         String dbType = statementProxy.getConnectionProxy().getDbType();
         if (CollectionUtils.isEmpty(sqlRecognizers)) {
+            // 获取 sqlRecognizers
             sqlRecognizers = SQLVisitorFactory.get(
                     statementProxy.getTargetSQL(),
                     dbType);
         }
         Executor<T> executor;
         if (CollectionUtils.isEmpty(sqlRecognizers)) {
+            // 生成简单执行器
             executor = new PlainExecutor<>(statementProxy, statementCallback);
         } else {
             if (sqlRecognizers.size() == 1) {
                 SQLRecognizer sqlRecognizer = sqlRecognizers.get(0);
                 switch (sqlRecognizer.getSQLType()) {
                     case INSERT:
+                        // 加载 insert 执行器
                         executor = EnhancedServiceLoader.load(InsertExecutor.class, dbType,
                                     new Class[]{StatementProxy.class, StatementCallback.class, SQLRecognizer.class},
                                     new Object[]{statementProxy, statementCallback, sqlRecognizer});
                         break;
                     case UPDATE:
+                        // 加载 update 执行器
                         if (JdbcConstants.SQLSERVER.equalsIgnoreCase(dbType)) {
                             executor = new SqlServerUpdateExecutor<>(statementProxy, statementCallback, sqlRecognizer);
                         } else {
@@ -110,6 +124,7 @@ public class ExecuteTemplate {
                         }
                         break;
                     case DELETE:
+                        // 加载 delete 执行器
                         if (JdbcConstants.SQLSERVER.equalsIgnoreCase(dbType)) {
                             executor = new SqlServerDeleteExecutor<>(statementProxy, statementCallback, sqlRecognizer);
                         } else {
@@ -117,6 +132,7 @@ public class ExecuteTemplate {
                         }
                         break;
                     case SELECT_FOR_UPDATE:
+                        // 加载 select ... for update 执行器
                         if (JdbcConstants.SQLSERVER.equalsIgnoreCase(dbType)) {
                             executor = new SqlServerSelectForUpdateExecutor<>(statementProxy, statementCallback, sqlRecognizer);
                         } else {
@@ -156,15 +172,18 @@ public class ExecuteTemplate {
                         }
                         break;
                     default:
+                        // 加载简单执行器
                         executor = new PlainExecutor<>(statementProxy, statementCallback);
                         break;
                 }
             } else {
+                // 多执行器
                 executor = new MultiExecutor<>(statementProxy, statementCallback, sqlRecognizers);
             }
         }
         T rs;
         try {
+            // 通过执行器执行
             rs = executor.execute(args);
         } catch (Throwable ex) {
             if (!(ex instanceof SQLException)) {

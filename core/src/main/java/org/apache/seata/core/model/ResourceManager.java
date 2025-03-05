@@ -24,6 +24,7 @@ import java.util.Map;
  */
 public interface ResourceManager extends ResourceManagerInbound, ResourceManagerOutbound {
 
+    // 注册一个资源
     /**
      * Register a Resource to be managed by Resource Manager.
      *
@@ -31,6 +32,7 @@ public interface ResourceManager extends ResourceManagerInbound, ResourceManager
      */
     void registerResource(Resource resource);
 
+    // 取消注册一个资源
     /**
      * Unregister a Resource from the Resource Manager.
      *
@@ -38,6 +40,7 @@ public interface ResourceManager extends ResourceManagerInbound, ResourceManager
      */
     void unregisterResource(Resource resource);
 
+    // 获取管理的所有资源
     /**
      * Get all resources managed by this manager.
      *
@@ -45,6 +48,7 @@ public interface ResourceManager extends ResourceManagerInbound, ResourceManager
      */
     Map<String, Resource> getManagedResources();
 
+    // 获取分支事务类型，AT、TCC 等
     /**
      * Get the BranchType.
      *

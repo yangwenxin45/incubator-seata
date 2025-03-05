@@ -16,13 +16,13 @@
  */
 package org.apache.seata.rm.datasource;
 
+import org.apache.seata.rm.datasource.sql.struct.Field;
+import org.apache.seata.sqlparser.util.ColumnUtils;
+
 import java.sql.PreparedStatement;
 import java.sql.SQLException;
 import java.util.List;
 import java.util.Map;
-
-import org.apache.seata.rm.datasource.sql.struct.Field;
-import org.apache.seata.sqlparser.util.ColumnUtils;
 
 /**
  * generate sql and set value to sql
@@ -104,10 +104,13 @@ public class SqlGenerateUtils {
     public static void setParamForPk(List<Map<String, Field>> pkRowsList, List<String> pkColumnNameList,
                                      PreparedStatement pst) throws SQLException {
         int paramIndex = 1;
+        // 遍历所有行
         for (int i = 0; i < pkRowsList.size(); i++) {
             Map<String, Field> rowData = pkRowsList.get(i);
+            // 遍历所有主键列
             for (String columnName : pkColumnNameList) {
                 Field pkField = rowData.get(columnName);
+                // 设置值
                 pst.setObject(paramIndex, pkField.getValue(), pkField.getType());
                 paramIndex++;
             }

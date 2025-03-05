@@ -22,6 +22,7 @@ package org.apache.seata.sqlparser;
  */
 public interface SQLRecognizer {
 
+    // 获取 SQL 语句的类型
     /**
      * Type of the SQL. INSERT/UPDATE/DELETE ...
      *
@@ -29,6 +30,7 @@ public interface SQLRecognizer {
      */
     SQLType getSQLType();
 
+    // 获取表别名
     /**
      * TableRecords source related in the SQL, including alias if any.
      * SELECT id, name FROM user u WHERE ...
@@ -38,6 +40,7 @@ public interface SQLRecognizer {
      */
     String getTableAlias();
 
+    // 获取表名
     /**
      * TableRecords name related in the SQL.
      * SELECT id, name FROM user u WHERE ...
@@ -48,6 +51,7 @@ public interface SQLRecognizer {
      */
     String getTableName();
 
+    // 获取原始的 SQL 语句
     /**
      * Return the original SQL input by the upper application.
      *

@@ -16,16 +16,6 @@
  */
 package org.apache.seata.rm.datasource.exec;
 
-import java.sql.SQLException;
-import java.sql.Statement;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.concurrent.Callable;
-import java.util.function.Function;
-import java.util.function.Predicate;
-import java.util.stream.Collectors;
-
 import org.apache.seata.common.util.CollectionUtils;
 import org.apache.seata.rm.datasource.AbstractConnectionProxy;
 import org.apache.seata.rm.datasource.ConnectionContext;
@@ -36,6 +26,16 @@ import org.apache.seata.rm.datasource.sql.struct.TableRecords;
 import org.apache.seata.sqlparser.SQLRecognizer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.sql.SQLException;
+import java.sql.Statement;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.Callable;
+import java.util.function.Function;
+import java.util.function.Predicate;
+import java.util.stream.Collectors;
 
 /**
  * The type Abstract dml base executor.
@@ -78,14 +78,26 @@ public abstract class AbstractDMLBaseExecutor<T, S extends Statement> extends Ba
 
     @Override
     public T doExecute(Object... args) throws Throwable {
+        // 获取连接代理
         AbstractConnectionProxy connectionProxy = statementProxy.getConnectionProxy();
         if (connectionProxy.getAutoCommit()) {
+            // autocommit 为 true
             return executeAutoCommitTrue(args);
         } else {
+            // autocommit 为 false
             return executeAutoCommitFalse(args);
         }
     }
 
+    /**
+     * 1. 生成前镜像
+     * 2. 执行原始 SQL 语句
+     * 3. 生成后镜像
+     * 4. 准备事务日志
+     *
+     * @author yangwenxin
+     * @date 2025-03-03 17:35
+     */
     /**
      * Execute auto commit false t.
      *
@@ -95,9 +107,13 @@ public abstract class AbstractDMLBaseExecutor<T, S extends Statement> extends Ba
      */
     protected T executeAutoCommitFalse(Object[] args) throws Exception {
         try {
+            // 生成前镜像
             TableRecords beforeImage = beforeImage();
+            // 执行原始 SQL 语句
             T result = statementCallback.execute(statementProxy.getTargetStatement(), args);
+            // 生成后镜像
             TableRecords afterImage = afterImage(beforeImage);
+            // 准备事务日志
             prepareUndoLog(beforeImage, afterImage);
             return result;
         } catch (TableMetaException e) {
@@ -138,11 +154,15 @@ public abstract class AbstractDMLBaseExecutor<T, S extends Statement> extends Ba
      * @throws Throwable the throwable
      */
     protected T executeAutoCommitTrue(Object[] args) throws Throwable {
+        // 获取连接代理
         ConnectionProxy connectionProxy = statementProxy.getConnectionProxy();
         try {
+            // 将 autocommit 设置为 false
             connectionProxy.changeAutoCommit();
             return new LockRetryPolicy(connectionProxy).execute(() -> {
+                // 执行 autocommit 为 false 的逻辑
                 T result = executeAutoCommitFalse(args);
+                // 分支事务提交
                 connectionProxy.commit();
                 return result;
             });
@@ -150,11 +170,14 @@ public abstract class AbstractDMLBaseExecutor<T, S extends Statement> extends Ba
             // when exception occur in finally,this exception will lost, so just print it here
             LOGGER.error("execute executeAutoCommitTrue error:{}", e.getMessage(), e);
             if (!LockRetryPolicy.isLockRetryPolicyBranchRollbackOnConflict()) {
+                // 回滚分支事务
                 connectionProxy.getTargetConnection().rollback();
             }
             throw e;
         } finally {
+            // 重置连接上下文
             connectionProxy.getContext().reset();
+            // 将 autocommit 设置为 true
             connectionProxy.setAutoCommit(true);
         }
     }

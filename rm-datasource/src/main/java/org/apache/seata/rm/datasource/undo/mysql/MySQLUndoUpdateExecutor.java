@@ -16,19 +16,19 @@
  */
 package org.apache.seata.rm.datasource.undo.mysql;
 
-import java.util.List;
-import java.util.stream.Collectors;
-
 import org.apache.seata.common.exception.ShouldNeverHappenException;
 import org.apache.seata.common.util.CollectionUtils;
-import org.apache.seata.sqlparser.util.ColumnUtils;
 import org.apache.seata.rm.datasource.SqlGenerateUtils;
 import org.apache.seata.rm.datasource.sql.struct.Field;
 import org.apache.seata.rm.datasource.sql.struct.Row;
 import org.apache.seata.rm.datasource.sql.struct.TableRecords;
 import org.apache.seata.rm.datasource.undo.AbstractUndoExecutor;
 import org.apache.seata.rm.datasource.undo.SQLUndoLog;
+import org.apache.seata.sqlparser.util.ColumnUtils;
 import org.apache.seata.sqlparser.util.JdbcConstants;
+
+import java.util.List;
+import java.util.stream.Collectors;
 
 /**
  * The type My sql undo update executor.
@@ -48,16 +48,21 @@ public class MySQLUndoUpdateExecutor extends AbstractUndoExecutor {
      */
     @Override
     protected String buildUndoSQL() {
+        // 获取前镜像
         TableRecords beforeImage = sqlUndoLog.getBeforeImage();
+        // 获取前镜像的所有行
         List<Row> beforeImageRows = beforeImage.getRows();
+        // 如果前镜像没有任何行，则表明 update 语句没有更改任何行，抛出异常
         if (CollectionUtils.isEmpty(beforeImageRows)) {
             throw new ShouldNeverHappenException("Invalid UNDO LOG"); // TODO
         }
+        // 取出第一行
         Row row = beforeImageRows.get(0);
 
         List<Field> nonPkFields = row.nonPrimaryKeys();
         // update sql undo log before image all field come from table meta. need add escape.
         // see BaseTransactionalExecutor#buildTableRecords
+        // 待更新的所有列名
         String updateColumns = nonPkFields.stream().map(
             field -> {
                 String addEscape = ColumnUtils.addEscape(field.getName(), JdbcConstants.MYSQL);
@@ -65,10 +70,13 @@ public class MySQLUndoUpdateExecutor extends AbstractUndoExecutor {
             })
             .collect(Collectors.joining(", "));
 
+        // 主键名列表
         List<String> pkNameList = getOrderedPkList(beforeImage, row, JdbcConstants.MYSQL).stream().map(e -> e.getName())
             .collect(Collectors.toList());
+        // 构建 where 子句
         String whereSql = SqlGenerateUtils.buildWhereConditionByPKs(pkNameList, JdbcConstants.MYSQL);
 
+        // 合成一个完整的 update 语句
         return String.format(UPDATE_SQL_TEMPLATE, sqlUndoLog.getTableName(), updateColumns, whereSql);
     }
 

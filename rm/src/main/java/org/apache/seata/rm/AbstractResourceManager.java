@@ -16,7 +16,6 @@
  */
 package org.apache.seata.rm;
 
-import java.util.concurrent.TimeoutException;
 import org.apache.seata.common.ConfigurationKeys;
 import org.apache.seata.common.DefaultValues;
 import org.apache.seata.common.exception.NotSupportYetException;
@@ -26,25 +25,17 @@ import org.apache.seata.config.ConfigurationFactory;
 import org.apache.seata.core.exception.RmTransactionException;
 import org.apache.seata.core.exception.TransactionException;
 import org.apache.seata.core.exception.TransactionExceptionCode;
-import org.apache.seata.core.model.BranchStatus;
-import org.apache.seata.core.model.BranchType;
-import org.apache.seata.core.model.GlobalStatus;
-import org.apache.seata.core.model.Resource;
-import org.apache.seata.core.model.ResourceManager;
+import org.apache.seata.core.model.*;
 import org.apache.seata.core.protocol.ResultCode;
-import org.apache.seata.core.protocol.transaction.BranchRegisterRequest;
-import org.apache.seata.core.protocol.transaction.BranchRegisterResponse;
-import org.apache.seata.core.protocol.transaction.BranchReportRequest;
-import org.apache.seata.core.protocol.transaction.BranchReportResponse;
-import org.apache.seata.core.protocol.transaction.GlobalStatusRequest;
-import org.apache.seata.core.protocol.transaction.GlobalStatusResponse;
+import org.apache.seata.core.protocol.transaction.*;
 import org.apache.seata.core.rpc.netty.RmNettyRemotingClient;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.concurrent.TimeoutException;
+
 /**
  * abstract ResourceManager
- *
  */
 public abstract class AbstractResourceManager implements ResourceManager {
 
@@ -72,6 +63,7 @@ public abstract class AbstractResourceManager implements ResourceManager {
         try {
             StringUtils.checkDataSize(applicationData, "applicationData", appDataErrSize, throwDataSizeExp);
 
+            // 初始化分支注册请求
             BranchRegisterRequest request = new BranchRegisterRequest();
             request.setXid(xid);
             request.setLockKey(lockKeys);
@@ -79,7 +71,9 @@ public abstract class AbstractResourceManager implements ResourceManager {
             request.setBranchType(branchType);
             request.setApplicationData(applicationData);
 
+            // 同步发送分支注册请求
             BranchRegisterResponse response = (BranchRegisterResponse) RmNettyRemotingClient.getInstance().sendSyncRequest(request);
+            // 如果返回码为失败，则抛出异常
             if (response.getResultCode() == ResultCode.Failed) {
                 throw new RmTransactionException(response.getTransactionExceptionCode(),
                     String.format("branch register failed, xid: %s, errMsg: %s ", xid, response.getMsg()));
@@ -87,10 +81,13 @@ public abstract class AbstractResourceManager implements ResourceManager {
             if (LOGGER.isInfoEnabled()) {
                 LOGGER.info("branch register success, xid:{}, branchId:{}, lockKeys:{}", xid, response.getBranchId(), lockKeys);
             }
+            // 返回分支事务 ID
             return response.getBranchId();
         } catch (TimeoutException toe) {
+            // RPC 超时异常
             throw new RmTransactionException(TransactionExceptionCode.IO, "branch register timeout, xid:" + xid, toe);
         } catch (RuntimeException rex) {
+            // 运行时异常
             throw new RmTransactionException(TransactionExceptionCode.BranchRegisterFailed,
                 "branch register exception, xid:" + xid, rex);
         }
@@ -110,20 +107,25 @@ public abstract class AbstractResourceManager implements ResourceManager {
     public void branchReport(BranchType branchType, String xid, long branchId, BranchStatus status, String applicationData) throws TransactionException {
         try {
             StringUtils.checkDataSize(applicationData, "applicationData", appDataErrSize, throwDataSizeExp);
+            // 创建分支上报请求
             BranchReportRequest request = new BranchReportRequest();
             request.setXid(xid);
             request.setBranchId(branchId);
             request.setStatus(status);
             request.setApplicationData(applicationData);
 
+            // 同步发送分支上报请求
             BranchReportResponse response = (BranchReportResponse) RmNettyRemotingClient.getInstance().sendSyncRequest(request);
             if (response.getResultCode() == ResultCode.Failed) {
+                // 如果返回码为失败，则抛出异常
                 throw new RmTransactionException(response.getTransactionExceptionCode(),
                     String.format("branch report failed, xid: %s, errMsg: %s ", xid, response.getMsg()));
             }
         } catch (TimeoutException toe) {
+            // RPC 超时异常
             throw new RmTransactionException(TransactionExceptionCode.IO, "branch report timeout, xid:" + xid, toe);
         } catch (RuntimeException rex) {
+            // 运行时异常
             throw new RmTransactionException(TransactionExceptionCode.BranchReportFailed,
                 "branch report exception, xid:" + xid, rex);
         }
@@ -141,6 +143,7 @@ public abstract class AbstractResourceManager implements ResourceManager {
 
     @Override
     public void registerResource(Resource resource) {
+        // 通过 RPC 客户端注册资源
         RmNettyRemotingClient.getInstance().registerResource(resource.getResourceGroupId(), resource.getResourceId());
     }
 

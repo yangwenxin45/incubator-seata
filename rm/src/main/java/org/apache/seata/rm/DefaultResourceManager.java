@@ -16,20 +16,16 @@
  */
 package org.apache.seata.rm;
 
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
-
 import org.apache.seata.common.exception.FrameworkException;
 import org.apache.seata.common.loader.EnhancedServiceLoader;
 import org.apache.seata.common.util.CollectionUtils;
 import org.apache.seata.core.exception.TransactionException;
-import org.apache.seata.core.model.BranchStatus;
-import org.apache.seata.core.model.BranchType;
-import org.apache.seata.core.model.GlobalStatus;
-import org.apache.seata.core.model.Resource;
-import org.apache.seata.core.model.ResourceManager;
+import org.apache.seata.core.model.*;
+
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * default resource manager, adapt all resource managers
@@ -66,6 +62,7 @@ public class DefaultResourceManager implements ResourceManager {
         resourceManagers.put(branchType, rm);
     }
 
+    // 初始化所有资源管理器
     protected void initResourceManagers() {
         //init all resource managers
         List<ResourceManager> allResourceManagers = EnhancedServiceLoader.loadAll(ResourceManager.class);
@@ -132,6 +129,7 @@ public class DefaultResourceManager implements ResourceManager {
         return allResource;
     }
 
+    // 根据分支事务类型获取资源管理器
     /**
      * get ResourceManager by Resource Type
      *

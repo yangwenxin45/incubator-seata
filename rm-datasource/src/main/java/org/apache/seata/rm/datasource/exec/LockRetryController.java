@@ -41,8 +41,10 @@ public class LockRetryController {
         CONFIG.addConfigListener(ConfigurationKeys.CLIENT_LOCK_RETRY_TIMES, LISTENER);
     }
 
+    // 锁冲突重试间隔
     private int lockRetryInterval;
 
+    // 锁冲突重试次数
     private int lockRetryTimes;
 
     /**
@@ -63,6 +65,7 @@ public class LockRetryController {
         // prioritize the rollback of other transactions
         if (--lockRetryTimes < 0 || (e instanceof LockConflictException
             && ((LockConflictException)e).getCode() == TransactionExceptionCode.LockKeyConflictFailFast)) {
+            // 锁冲突重试次数用完，抛出锁等待超时异常
             throw new LockWaitTimeoutException("Global lock wait timeout", e);
         }
 

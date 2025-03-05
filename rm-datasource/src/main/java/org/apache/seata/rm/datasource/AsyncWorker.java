@@ -16,22 +16,6 @@
  */
 package org.apache.seata.rm.datasource;
 
-import java.sql.Connection;
-import java.sql.SQLException;
-import java.util.HashMap;
-import java.util.LinkedHashSet;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.ScheduledThreadPoolExecutor;
-import java.util.concurrent.ThreadFactory;
-import java.util.concurrent.TimeUnit;
-
 import com.google.common.collect.Lists;
 import org.apache.seata.common.thread.NamedThreadFactory;
 import org.apache.seata.common.util.IOUtil;
@@ -42,6 +26,11 @@ import org.apache.seata.rm.datasource.undo.UndoLogManager;
 import org.apache.seata.rm.datasource.undo.UndoLogManagerFactory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.sql.Connection;
+import java.sql.SQLException;
+import java.util.*;
+import java.util.concurrent.*;
 
 import static org.apache.seata.common.DefaultValues.DEFAULT_CLIENT_ASYNC_COMMIT_BUFFER_LIMIT;
 import static org.apache.seata.core.constants.ConfigurationKeys.CLIENT_ASYNC_COMMIT_BUFFER_LIMIT;
@@ -79,8 +68,11 @@ public class AsyncWorker {
     }
 
     public BranchStatus branchCommit(String xid, long branchId, String resourceId) {
+        // 二阶段的上下文
         Phase2Context context = new Phase2Context(xid, branchId, resourceId);
+        // 添加到提交队列
         addToCommitQueue(context);
+        // 返回二阶段提交成功
         return BranchStatus.PhaseTwo_Committed;
     }
 
@@ -111,17 +103,21 @@ public class AsyncWorker {
     }
 
     private void doBranchCommit() {
+        // 如果队列为空，则返回
         if (commitQueue.isEmpty()) {
             return;
         }
 
         // transfer all context currently received to this list
         List<Phase2Context> allContexts = new LinkedList<>();
+        // 把队列中的二阶段上下文放到列表中
         commitQueue.drainTo(allContexts);
 
         // group context by their resourceId
+        // 按照资源 ID 进行分组
         Map<String, List<Phase2Context>> groupedContexts = groupedByResourceId(allContexts);
 
+        // 处理每个分组
         groupedContexts.forEach(this::dealWithGroupedContexts);
     }
 
@@ -144,7 +140,9 @@ public class AsyncWorker {
             LOGGER.warn("resourceId is empty and will skip.");
             return;
         }
+        // 根据资源 ID 取得数据源代理
         DataSourceProxy dataSourceProxy = dataSourceManager.get(resourceId);
+        // 如果数据源代理为空则返回
         if (dataSourceProxy == null) {
             LOGGER.warn("failed to find resource for {} and requeue", resourceId);
             addAllToCommitQueue(contexts);
@@ -153,12 +151,16 @@ public class AsyncWorker {
 
         Connection conn = null;
         try {
+            // 获取普通的数据库连接
             conn = dataSourceProxy.getPlainConnection();
+            // 得到 undolog 管理器
             UndoLogManager undoLogManager = UndoLogManagerFactory.getUndoLogManager(dataSourceProxy.getDbType());
 
             // split contexts into several lists, with each list contain no more element than limit size
+            // 把二阶段上下文列表拆分成多个小列表，目的是防止列表过大，造成拼接出的 SQL 语句过长，会超出数据库的限制而失败
             List<List<Phase2Context>> splitByLimit = Lists.partition(contexts, UNDOLOG_DELETE_LIMIT_SIZE);
             for (List<Phase2Context> partition : splitByLimit) {
+                // 对每个小列表处理，调用 deleteUndoLog 方法删除一批分支事务的日志
                 deleteUndoLog(conn, undoLogManager, partition);
             }
         } catch (SQLException sqlExx) {
@@ -171,21 +173,27 @@ public class AsyncWorker {
     }
 
     private void deleteUndoLog(final Connection conn, UndoLogManager undoLogManager, List<Phase2Context> contexts) {
+        // xid 集合
         Set<String> xids = new LinkedHashSet<>(contexts.size());
+        // 分支事务 ID 集合
         Set<Long> branchIds = new LinkedHashSet<>(contexts.size());
+        // 把二阶段上下文中的 XID 和分支事务 ID 分别加入上面的两个集合中
         contexts.forEach(context -> {
             xids.add(context.xid);
             branchIds.add(context.branchId);
         });
 
         try {
+            // 批量删除事务日志
             undoLogManager.batchDeleteUndoLog(xids, branchIds, conn);
+            // 提交本地事务
             if (!conn.getAutoCommit()) {
                 conn.commit();
             }
         } catch (SQLException e) {
             LOGGER.error("Failed to batch delete undo log", e);
             try {
+                // 如果出现 SQL 异常，则会滚本地事务
                 conn.rollback();
                 addAllToCommitQueue(contexts);
             } catch (SQLException rollbackEx) {

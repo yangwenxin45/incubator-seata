@@ -19,24 +19,12 @@ package org.apache.seata.rm.datasource;
 import org.apache.seata.core.context.RootContext;
 import org.apache.seata.core.model.BranchType;
 import org.apache.seata.rm.datasource.sql.SQLVisitorFactory;
-import org.apache.seata.sqlparser.struct.TableMeta;
 import org.apache.seata.rm.datasource.sql.struct.TableMetaCacheFactory;
 import org.apache.seata.sqlparser.SQLRecognizer;
 import org.apache.seata.sqlparser.SQLType;
-import java.sql.Array;
-import java.sql.Blob;
-import java.sql.CallableStatement;
-import java.sql.Clob;
-import java.sql.Connection;
-import java.sql.DatabaseMetaData;
-import java.sql.NClob;
-import java.sql.PreparedStatement;
-import java.sql.SQLClientInfoException;
-import java.sql.SQLException;
-import java.sql.SQLWarning;
-import java.sql.SQLXML;
-import java.sql.Statement;
-import java.sql.Struct;
+import org.apache.seata.sqlparser.struct.TableMeta;
+
+import java.sql.*;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
@@ -120,9 +108,11 @@ public abstract class AbstractConnectionProxy implements Connection {
                 }
             }
         }
+        // 创建 PreparedStatement 对象
         if (targetPreparedStatement == null) {
             targetPreparedStatement = getTargetConnection().prepareStatement(sql);
         }
+        // 包装成 PreparedStatementProxy 对象
         return new PreparedStatementProxy(this, targetPreparedStatement, sql);
     }
 

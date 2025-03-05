@@ -16,18 +16,6 @@
  */
 package org.apache.seata.rm.datasource.undo;
 
-import java.sql.Connection;
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
-import java.sql.SQLException;
-import java.sql.SQLIntegrityConstraintViolationException;
-import java.util.Collections;
-import java.util.Date;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-
 import org.apache.seata.common.Constants;
 import org.apache.seata.common.util.CollectionUtils;
 import org.apache.seata.common.util.SizeUtil;
@@ -48,10 +36,11 @@ import org.apache.seata.sqlparser.struct.TableMeta;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import static org.apache.seata.common.DefaultValues.DEFAULT_CLIENT_UNDO_COMPRESS_ENABLE;
-import static org.apache.seata.common.DefaultValues.DEFAULT_CLIENT_UNDO_COMPRESS_THRESHOLD;
-import static org.apache.seata.common.DefaultValues.DEFAULT_CLIENT_UNDO_COMPRESS_TYPE;
-import static org.apache.seata.common.DefaultValues.DEFAULT_TRANSACTION_UNDO_LOG_TABLE;
+import java.sql.*;
+import java.util.Date;
+import java.util.*;
+
+import static org.apache.seata.common.DefaultValues.*;
 import static org.apache.seata.core.exception.TransactionExceptionCode.BranchRollbackFailed_Retriable;
 import static org.apache.seata.core.exception.TransactionExceptionCode.BranchRollbackFailed_Unretriable;
 
@@ -156,26 +145,31 @@ public abstract class AbstractUndoLogManager implements UndoLogManager {
      */
     @Override
     public void batchDeleteUndoLog(Set<String> xids, Set<Long> branchIds, Connection conn) throws SQLException {
+        // 如果 XID 集合或分支事务 ID 集合为空，则返回
         if (CollectionUtils.isEmpty(xids) || CollectionUtils.isEmpty(branchIds)) {
             return;
         }
         int xidSize = xids.size();
         int branchIdSize = branchIds.size();
+        // 生成批量删除日志的 SQL 语句
         String batchDeleteSql = toBatchDeleteUndoLogSql(xidSize, branchIdSize);
         String batchDeleteSubSql = toBatchDeleteSubUndoLogSql(xidSize, branchIdSize);
         try (PreparedStatement deletePST = conn.prepareStatement(batchDeleteSql);
              PreparedStatement deleteSubPST = conn.prepareStatement(batchDeleteSubSql)) {
             int paramsIndex = 1;
             for (Long branchId : branchIds) {
+                // 设置分支 ID
                 deletePST.setLong(paramsIndex, branchId);
                 deleteSubPST.setString(paramsIndex, UndoLogConstants.BRANCH_ID_KEY + CollectionUtils.KV_SPLIT + branchId);
                 paramsIndex++;
             }
             for (String xid : xids) {
+                // 设置 XID
                 deletePST.setString(paramsIndex, xid);
                 deleteSubPST.setString(paramsIndex, xid);
                 paramsIndex++;
             }
+            // 执行删除语句
             int deleteRows = deletePST.executeUpdate();
             if (LOGGER.isDebugEnabled()) {
                 LOGGER.debug("batch delete undo log size {}", deleteRows);
@@ -255,7 +249,9 @@ public abstract class AbstractUndoLogManager implements UndoLogManager {
      */
     @Override
     public void flushUndoLogs(ConnectionProxy cp) throws SQLException {
+        // 获取连接上下文
         ConnectionContext connectionContext = cp.getContext();
+        // 如果没有事务日志则返回
         if (!connectionContext.hasUndoLog()) {
             return;
         }
@@ -266,9 +262,12 @@ public abstract class AbstractUndoLogManager implements UndoLogManager {
         BranchUndoLog branchUndoLog = new BranchUndoLog();
         branchUndoLog.setXid(xid);
         branchUndoLog.setBranchId(branchId);
+        // 设置 SQL undolog
         branchUndoLog.setSqlUndoLogs(connectionContext.getUndoItems());
 
+        // 获取分支事务日志解析器
         UndoLogParser parser = UndoLogParserFactory.getInstance();
+        // 将分支事务日志编码为字节数组
         byte[] undoLogContent = parser.encode(branchUndoLog);
 
         if (LOGGER.isDebugEnabled()) {
@@ -276,8 +275,10 @@ public abstract class AbstractUndoLogManager implements UndoLogManager {
         }
 
         CompressorType compressorType = CompressorType.NONE;
+        // 如果需要压缩，则压缩字节数组
         if (needCompress(undoLogContent)) {
             compressorType = ROLLBACK_INFO_COMPRESS_TYPE;
+            // 执行压缩算法
             undoLogContent = CompressorFactory.getCompressor(compressorType.getCode()).compress(undoLogContent);
         }
         String maxAllowedPacket = getMaxAllowedPacket(cp.getDataSourceProxy());
@@ -288,6 +289,7 @@ public abstract class AbstractUndoLogManager implements UndoLogManager {
                 parser.getName(), compressorType,
                 UndoLogConstants.MAX_ALLOWED_PACKET, maxAllowedPacket
         );
+        // 插入事务日志
         insertUndoLogWithNormal(xid, branchId, rollbackCtx, undoLogContent, cp.getTargetConnection());
     }
 
@@ -305,6 +307,7 @@ public abstract class AbstractUndoLogManager implements UndoLogManager {
         Connection conn = null;
         ResultSet rs = null;
         PreparedStatement selectPST = null;
+        // autoCommit 的当前状态
         boolean originalAutoCommit = true;
 
         for (; ; ) {
@@ -315,16 +318,20 @@ public abstract class AbstractUndoLogManager implements UndoLogManager {
 
                 // The entire undo process should run in a local transaction.
                 if (originalAutoCommit) {
+                    // 如果 autocommit 本来为 true，则将其设置为 false
                     conn.setAutoCommit(false);
                 }
 
                 // Find UNDO LOG
+                // 生成查询 undolog 的 PreparedStatement
                 selectPST = conn.prepareStatement(buildSelectUndoSql());
                 selectPST.setLong(1, branchId);
                 selectPST.setString(2, xid);
+                // 执行查询，得到结果集
                 rs = selectPST.executeQuery();
 
                 boolean exists = false;
+                // 遍历找到的事务日志
                 while (rs.next()) {
                     exists = true;
 
@@ -346,25 +353,37 @@ public abstract class AbstractUndoLogManager implements UndoLogManager {
                     String serializer = context == null ? null : context.get(UndoLogConstants.SERIALIZER_KEY);
                     UndoLogParser parser = serializer == null ? UndoLogParserFactory.getInstance()
                             : UndoLogParserFactory.getInstance(serializer);
+                    // 解码 rollbackinfo 字段
                     BranchUndoLog branchUndoLog = parser.decode(rollbackInfo);
 
                     try {
                         // put serializer name to local
+                        // 保存序列化器名称
                         setCurrentSerializer(parser.getName());
+                        /**
+                         * 一行 undo_log 数据代表一个分支事务，即业务侧的一个本地事务
+                         * 一个本地事务可能包含多个 insert、update、delete 语句，各自对应一个 SQLUndoLog 对象
+                         */
                         List<SQLUndoLog> sqlUndoLogs = branchUndoLog.getSqlUndoLogs();
                         if (sqlUndoLogs.size() > 1) {
+                            // 事务的回滚需要从后往前依次进行，所以把顺序反转
                             Collections.reverse(sqlUndoLogs);
                         }
                         for (SQLUndoLog sqlUndoLog : sqlUndoLogs) {
+                            // 获取表元数据
                             TableMeta tableMeta = TableMetaCacheFactory.getTableMetaCache(dataSourceProxy.getDbType()).getTableMeta(
                                     conn, sqlUndoLog.getTableName(), dataSourceProxy.getResourceId());
+                            // 设置表元数据
                             sqlUndoLog.setTableMeta(tableMeta);
+                            // 获取回滚执行器
                             AbstractUndoExecutor undoExecutor = UndoExecutorFactory.getUndoExecutor(
                                     dataSourceProxy.getDbType(), sqlUndoLog);
+                            // 执行回滚
                             undoExecutor.executeOn(connectionProxy);
                         }
                     } finally {
                         // remove serializer name
+                        // 删除保存的序列化器名称
                         removeCurrentSerializer();
                     }
                 }
@@ -379,7 +398,9 @@ public abstract class AbstractUndoLogManager implements UndoLogManager {
                 // See https://github.com/seata/seata/issues/489
 
                 if (exists) {
+                    // 删除 undolog
                     deleteUndoLog(xid, branchId, conn);
+                    // 提交本地事务
                     conn.commit();
                     if (LOGGER.isInfoEnabled()) {
                         LOGGER.info("xid {} branch {}, undo_log deleted with {}", xid, branchId,

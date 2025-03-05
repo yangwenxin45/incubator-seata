@@ -16,6 +16,19 @@
  */
 package org.apache.seata.rm.datasource.exec;
 
+import org.apache.seata.common.DefaultValues;
+import org.apache.seata.common.util.IOUtil;
+import org.apache.seata.common.util.StringUtils;
+import org.apache.seata.config.Configuration;
+import org.apache.seata.config.ConfigurationFactory;
+import org.apache.seata.core.constants.ConfigurationKeys;
+import org.apache.seata.rm.datasource.SqlGenerateUtils;
+import org.apache.seata.rm.datasource.StatementProxy;
+import org.apache.seata.rm.datasource.sql.struct.TableRecords;
+import org.apache.seata.sqlparser.SQLRecognizer;
+import org.apache.seata.sqlparser.SQLUpdateRecognizer;
+import org.apache.seata.sqlparser.struct.TableMeta;
+
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -23,19 +36,6 @@ import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.StringJoiner;
-
-import org.apache.seata.common.util.IOUtil;
-import org.apache.seata.common.util.StringUtils;
-import org.apache.seata.config.Configuration;
-import org.apache.seata.config.ConfigurationFactory;
-import org.apache.seata.core.constants.ConfigurationKeys;
-import org.apache.seata.common.DefaultValues;
-import org.apache.seata.rm.datasource.SqlGenerateUtils;
-import org.apache.seata.rm.datasource.StatementProxy;
-import org.apache.seata.sqlparser.struct.TableMeta;
-import org.apache.seata.rm.datasource.sql.struct.TableRecords;
-import org.apache.seata.sqlparser.SQLRecognizer;
-import org.apache.seata.sqlparser.SQLUpdateRecognizer;
 
 /**
  * The type Update executor.
@@ -65,17 +65,25 @@ public class UpdateExecutor<T, S extends Statement> extends AbstractDMLBaseExecu
     @Override
     protected TableRecords beforeImage() throws SQLException {
         ArrayList<List<Object>> paramAppenderList = new ArrayList<>();
+        // 表元数据
         TableMeta tmeta = getTableMeta();
+        // 构建查前镜像的 select 语句，并把参数放在 paramAppenderList 列表中
         String selectSQL = buildBeforeImageSQL(tmeta, paramAppenderList);
+        // 构建记录集
         return buildTableRecords(tmeta, selectSQL, paramAppenderList);
     }
 
     protected String buildBeforeImageSQL(TableMeta tableMeta, ArrayList<List<Object>> paramAppenderList) {
+        // update SQL 识别器
         SQLUpdateRecognizer recognizer = (SQLUpdateRecognizer) sqlRecognizer;
+        // 构建查询语句
         StringBuilder prefix = new StringBuilder("SELECT ");
         StringBuilder suffix = new StringBuilder(" FROM ").append(getFromTableInSQL());
+        // 构建 where 语句
         String whereCondition = buildWhereCondition(recognizer, paramAppenderList);
+        // 构建 order by 语句
         String orderByCondition = buildOrderCondition(recognizer, paramAppenderList);
+        // 构建 limit 语句
         String limitCondition = buildLimitCondition(recognizer, paramAppenderList);
         if (StringUtils.isNotBlank(whereCondition)) {
             suffix.append(WHERE).append(whereCondition);
@@ -86,8 +94,10 @@ public class UpdateExecutor<T, S extends Statement> extends AbstractDMLBaseExecu
         if (StringUtils.isNotBlank(limitCondition)) {
             suffix.append(" ").append(limitCondition);
         }
+        // 在构建前镜像时，必须确保在本地事务提交前修改的行不能被别的事务修改
         suffix.append(" FOR UPDATE");
         StringJoiner selectSQLJoin = new StringJoiner(", ", prefix.toString(), suffix.toString());
+        // 获取更新的列
         List<String> needUpdateColumns = getNeedColumns(tableMeta.getTableName(), sqlRecognizer.getTableAlias(), recognizer.getUpdateColumnsUnEscape());
         needUpdateColumns.forEach(selectSQLJoin::add);
         return selectSQLJoin.toString();
@@ -99,6 +109,7 @@ public class UpdateExecutor<T, S extends Statement> extends AbstractDMLBaseExecu
         if (beforeImage == null || beforeImage.size() == 0) {
             return TableRecords.empty(getTableMeta());
         }
+        // 构建后镜像查询语句
         String selectSQL = buildAfterImageSQL(tmeta, beforeImage);
         PreparedStatement pst = null;
         ResultSet rs = null;

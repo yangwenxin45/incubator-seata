@@ -24,6 +24,7 @@ import org.apache.seata.core.exception.TransactionException;
  */
 public interface ResourceManagerOutbound {
 
+    // 注册分支事务
     /**
      * Branch register long.
      *
@@ -39,6 +40,7 @@ public interface ResourceManagerOutbound {
     Long branchRegister(BranchType branchType, String resourceId, String clientId, String xid, String applicationData, String lockKeys) throws
         TransactionException;
 
+    // 上报分支状态
     /**
      * Branch report.
      *
@@ -51,6 +53,7 @@ public interface ResourceManagerOutbound {
      */
     void branchReport(BranchType branchType, String xid, long branchId, BranchStatus status, String applicationData) throws TransactionException;
 
+    // 查询全局锁
     /**
      * Lock query boolean.
      *

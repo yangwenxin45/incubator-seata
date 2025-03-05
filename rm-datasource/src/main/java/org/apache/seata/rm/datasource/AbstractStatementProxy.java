@@ -18,11 +18,7 @@ package org.apache.seata.rm.datasource;
 
 import javax.sql.rowset.CachedRowSet;
 import javax.sql.rowset.RowSetProvider;
-import java.sql.Connection;
-import java.sql.ResultSet;
-import java.sql.SQLException;
-import java.sql.SQLWarning;
-import java.sql.Statement;
+import java.sql.*;
 
 /**
  * The type Abstract statement proxy.
@@ -37,11 +33,13 @@ public abstract class AbstractStatementProxy<T extends Statement> implements Sta
      */
     protected AbstractConnectionProxy connectionProxy;
 
+    // 原始 Statement 对象
     /**
      * The Target statement.
      */
     protected T targetStatement;
 
+    // 原始 SQL 语句
     /**
      * The Target sql.
      */

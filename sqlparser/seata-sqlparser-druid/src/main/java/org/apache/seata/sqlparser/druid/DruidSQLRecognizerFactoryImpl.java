@@ -36,8 +36,10 @@ import java.util.List;
 class DruidSQLRecognizerFactoryImpl implements SQLRecognizerFactory {
     @Override
     public List<SQLRecognizer> create(String sql, String dbType) {
+        // 使用 Druid 的解析器解析 SQL 语句
         List<SQLStatement> asts = SQLUtils.parseStatements(sql, DruidDbTypeAdapter.getAdaptiveDbType(dbType));
         if (CollectionUtils.isEmpty(asts)) {
+            // 当前不支持的 SQL 语句
             throw new UnsupportedOperationException("Unsupported SQL: " + sql);
         }
         if (asts.size() > 1 && !(asts.stream().allMatch(statement -> statement instanceof SQLUpdateStatement)
@@ -50,12 +52,16 @@ class DruidSQLRecognizerFactoryImpl implements SQLRecognizerFactory {
             SQLOperateRecognizerHolder recognizerHolder =
                     SQLOperateRecognizerHolderFactory.getSQLRecognizerHolder(dbType.toLowerCase());
             if (ast instanceof SQLInsertStatement) {
+                // insert 识别器
                 recognizer = recognizerHolder.getInsertRecognizer(sql, ast);
             } else if (ast instanceof SQLUpdateStatement) {
+                // update 识别器
                 recognizer = recognizerHolder.getUpdateRecognizer(sql, ast);
             } else if (ast instanceof SQLDeleteStatement) {
+                // delete 识别器
                 recognizer = recognizerHolder.getDeleteRecognizer(sql, ast);
             } else if (ast instanceof SQLSelectStatement) {
+                // select ... for update 执行器
                 recognizer = recognizerHolder.getSelectForUpdateRecognizer(sql, ast);
             }
             if (recognizer != null && recognizer.isSqlSyntaxSupports()) {

@@ -16,15 +16,7 @@
  */
 package org.apache.seata.rm.datasource;
 
-import java.sql.Connection;
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
-import java.sql.SQLException;
-import java.util.HashMap;
-import java.util.Map;
-
-import javax.sql.DataSource;
-
+import org.apache.commons.lang.StringUtils;
 import org.apache.seata.common.ConfigurationKeys;
 import org.apache.seata.common.Constants;
 import org.apache.seata.common.loader.EnhancedServiceNotFoundException;
@@ -38,9 +30,16 @@ import org.apache.seata.rm.datasource.undo.UndoLogManager;
 import org.apache.seata.rm.datasource.undo.UndoLogManagerFactory;
 import org.apache.seata.rm.datasource.util.JdbcUtils;
 import org.apache.seata.sqlparser.util.JdbcConstants;
-import org.apache.commons.lang.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import javax.sql.DataSource;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.util.HashMap;
+import java.util.Map;
 
 import static org.apache.seata.common.DefaultValues.DEFAULT_TRANSACTION_UNDO_LOG_TABLE;
 
@@ -86,6 +85,7 @@ public class DataSourceProxy extends AbstractDataSourceProxy implements Resource
         this(targetDataSource, DEFAULT_RESOURCE_GROUP_ID);
     }
 
+    // 初始化数据源
     /**
      * Instantiates a new Data source proxy.
      *
@@ -93,20 +93,25 @@ public class DataSourceProxy extends AbstractDataSourceProxy implements Resource
      * @param resourceGroupId  the resource group id
      */
     public DataSourceProxy(DataSource targetDataSource, String resourceGroupId) {
+        // 如果传入的目标数据源已经是 Seata 数据源代理，则将目标数据源设置为数据源代理的目标数据源
         if (targetDataSource instanceof SeataDataSourceProxy) {
             LOGGER.info("Unwrap the target data source, because the type is: {}", targetDataSource.getClass().getName());
             targetDataSource = ((SeataDataSourceProxy) targetDataSource).getTargetDataSource();
         }
         this.targetDataSource = targetDataSource;
+        // 初始化数据源代理
         init(targetDataSource, resourceGroupId);
     }
 
     private void init(DataSource dataSource, String resourceGroupId) {
         this.resourceGroupId = resourceGroupId;
         try (Connection connection = dataSource.getConnection()) {
+            // 数据库连接 URL
             jdbcUrl = connection.getMetaData().getURL();
+            // 数据库类型
             dbType = JdbcUtils.getDbType(jdbcUrl);
             if (JdbcConstants.ORACLE.equals(dbType)) {
+                // Oracle 数据库用户名
                 userName = connection.getMetaData().getUserName();
             } else if (JdbcConstants.MYSQL.equals(dbType)) {
                 validMySQLVersion(connection);
@@ -122,6 +127,7 @@ public class DataSourceProxy extends AbstractDataSourceProxy implements Resource
                     "if you have any problems in use, please feedback to us");
         }
         initResourceId();
+        // 注册到资源管理器
         DefaultResourceManager.get().registerResource(this);
         TableMetaCacheFactory.registerTableMeta(this);
         //Set the default branch type to 'AT' in the RootContext.
@@ -188,6 +194,7 @@ public class DataSourceProxy extends AbstractDataSourceProxy implements Resource
         TableMetaCacheFactory.tableMetaRefreshEvent(this.getResourceId());
     }
 
+    // 获取普通数据库连接
     /**
      * Gets plain connection.
      *
@@ -207,8 +214,10 @@ public class DataSourceProxy extends AbstractDataSourceProxy implements Resource
         return dbType;
     }
 
+    // 获取数据库连接代理
     @Override
     public ConnectionProxy getConnection() throws SQLException {
+        // 通过目标数据源创建连接
         Connection targetConnection = targetDataSource.getConnection();
         return new ConnectionProxy(this, targetConnection);
     }
