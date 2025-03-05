@@ -115,7 +115,15 @@ public abstract class AbstractUndoExecutor {
         }
         PreparedStatement undoPST = null;
         try {
-            // 构建回滚语句
+            /**
+             * 构建回滚语句
+             * 如果业务 SQL 语句是 insert 语句，则它的回滚语句就是 delete 语句，删掉在一阶段插入的行，基于后镜像构建
+             * 如果业务 SQL 语句是 delete 语句，则它的回滚语句就是 insert 语句，把在一阶段中删除的行重新插入进去，基于前镜像构建
+             * 如果业务 SQL 语句是 update 语句，则它的回滚语句还是 update 语句，把在一阶段中修改的行的值恢复回去，基于前镜像构建
+             *
+             * @author yangwenxin
+             * @date 2025-03-05 11:42
+             */
             String undoSQL = buildUndoSQL();
             undoPST = conn.prepareStatement(undoSQL);
             // 得到所有需要回滚的行
